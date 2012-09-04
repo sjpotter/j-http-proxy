@@ -61,16 +61,15 @@ public class Proxy implements Runnable {
         int length = -1;
         try {
             DataOutputStream out = new DataOutputStream(socket.getOutputStream());
-            InputStream sis = socket.getInputStream();
-            DataInputStream in = new DataInputStream(sis);
+            DataInputStream in = new DataInputStream(socket.getInputStream());
 
-            String inputLine;
+            String input;
             String url;
 
-            inputLine = in.readLine();
+            input = in.readLine();
 
-            System.out.println("input = " + inputLine);
-            if (inputLine == null) {
+            System.out.println("input = " + input);
+            if (input == null) {
                 out.close();
                 in.close();
                 socket.close();
@@ -78,7 +77,7 @@ public class Proxy implements Runnable {
                 return;
             }
 
-            StringTokenizer tok = new StringTokenizer(inputLine);
+            StringTokenizer tok = new StringTokenizer(input);
             if (tok.countTokens() != 3) {
                 System.out.println("this is a problem");
                 out.close();
@@ -110,10 +109,10 @@ public class Proxy implements Runnable {
             }
 
             int count = 0;
-            while ((inputLine = in.readLine()) != null) {
-                if (inputLine.length() != 0) {
+            while ((input = in.readLine()) != null) {
+                if (input.length() != 0) {
                     //System.out.println(count + " = " + inputLine);
-                    String[] tokens = inputLine.split(":");
+                    String[] tokens = input.split(":");
                     String headerName = tokens[0];
                     String headerAttr = "";
 
@@ -167,13 +166,10 @@ public class Proxy implements Runnable {
                 if (gzip)
                     is = new GZIPInputStream(is);
                 
-                //bin = new BufferedReader(new InputStreamReader(is));
             } catch (java.io.IOException e) {
                 is = conn.getErrorStream();
                 if (gzip)
                     is = new GZIPInputStream(is);
-                
-                //bin = new BufferedReader(new InputStreamReader(is));
             }
 
             // handle response headers
@@ -208,16 +204,18 @@ public class Proxy implements Runnable {
                 out.write(output.getBytes());
             }
 
-            byte input[] = new byte[BUFFER_SIZE];
-            int size = is.read(input, 0, BUFFER_SIZE);
-            while (size != -1) {
-              out.write(input, 0, size);
-              size = is.read(input, 0, BUFFER_SIZE);
+            if (is != null) {
+                byte webpage[] = new byte[BUFFER_SIZE];
+                int size = is.read(webpage, 0, BUFFER_SIZE);
+                while (size != -1) {
+                    out.write(webpage, 0, size);
+                    size = is.read(webpage, 0, BUFFER_SIZE);
+                }
             }
+            
             out.flush();
 
             conn.disconnect();
-
             // close out all resources
             if (is != null) {
                 is.close();
