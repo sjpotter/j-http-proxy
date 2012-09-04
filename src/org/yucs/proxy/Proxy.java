@@ -73,15 +73,20 @@ public class Proxy implements Runnable {
     @SuppressWarnings("deprecation")
     @Override
     public void run() {
+        HttpURLConnection conn;
+        InputStream is;
+        
         boolean post = false;
+        boolean gzip = false;
+        
         int length = -1;
         try {
+            String input;
+            
             out = new DataOutputStream(socket.getOutputStream());
             in = new DataInputStream(socket.getInputStream());
 
-            String input;
-            String url;
-
+            //first line of input is the request
             input = in.readLine();
             System.out.println("input = " + input);
             if (input == null) {
@@ -102,13 +107,12 @@ public class Proxy implements Runnable {
             if ("POST".equals(cmd)) {
                 post = true;
             }
-            url = tok.nextToken();
-
+            
+            String url = tok.nextToken();
             /* if (url.equals("<url to replace>")) {
                 url = "<send to me>";
             } */
 
-            HttpURLConnection conn;
             try {
                 conn = (HttpURLConnection) new URL(url).openConnection();
             } catch (java.net.MalformedURLException e) {
@@ -117,10 +121,11 @@ public class Proxy implements Runnable {
                 return;
             }
 
-            int count = 0;
+            //next N lines of input are the request properties
+            //they end with a blank line
             while ((input = in.readLine()) != null) {
                 if (input.length() != 0) {
-                    //System.out.println(count + " = " + inputLine);
+                    //System.out.println(inputLine);
                     String[] tokens = input.split(":");
                     String headerName = tokens[0];
                     String headerAttr = "";
@@ -135,19 +140,20 @@ public class Proxy implements Runnable {
                     if (headerAttr.length() != 0 && headerAttr.charAt(0) == ' ') {
                         headerAttr = headerAttr.substring(1);
                     }
-                    // System.out.println(headerName + " = " + headerAttr);
+
                     if (!headerName.equals("Proxy-Connection") && !headerName.startsWith("If-")) {
                         conn.addRequestProperty(headerName, headerAttr);
                     }
+                    
                     if (post && headerName.equals("Content-Length")) {
                         length = Integer.parseInt(headerAttr);
                     }
                 } else {
                     break;
                 }
-                count++;
             }
 
+            //the rest of the input is post data, if it exists
             if (post) {
                 conn.setDoOutput(true);
                 conn.setRequestMethod("POST");
@@ -162,10 +168,8 @@ public class Proxy implements Runnable {
                 put_out.close();
             }
 
-            InputStream is;
-
-            boolean gzip = false;
-
+            //now for handling the response
+            //need to handle gzip encoding
             if ("gzip".equals(conn.getContentEncoding())) {
                 gzip = true;
             }
@@ -181,7 +185,7 @@ public class Proxy implements Runnable {
                     is = new GZIPInputStream(is);
             }
 
-            // handle response headers
+            // read the response headers and filter out ones that don't make sense to client
             boolean finished = false;
             for (int i = 0; !finished; i++) {
                 String headerName = conn.getHeaderFieldKey(i);
@@ -209,11 +213,11 @@ public class Proxy implements Runnable {
                         continue;
                     }
                 }
-
                 out.write(output.getBytes());
             }
 
-            if (is != null) {
+            //write out web page to client
+            if (is != null) { //sometime can only have headers and no data?
                 byte webpage[] = new byte[BUFFER_SIZE];
                 int size = is.read(webpage, 0, BUFFER_SIZE);
                 while (size != -1) {
@@ -222,7 +226,6 @@ public class Proxy implements Runnable {
                 }
                 is.close();
             }
-
             out.flush();
 
             conn.disconnect();
