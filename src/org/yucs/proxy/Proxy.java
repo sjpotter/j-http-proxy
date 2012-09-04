@@ -39,6 +39,10 @@ public class Proxy implements Runnable {
     private Socket socket = null;
     private static final int BUFFER_SIZE = 32768;
     
+    //client side
+    DataOutputStream out;
+    DataInputStream in;
+
     public Proxy(Socket socket) {
         this.socket = socket;
     }
@@ -54,36 +58,43 @@ public class Proxy implements Runnable {
         }
     }
 
+    private void close() throws IOException {
+        if (out != null) {
+            out.close();
+        }
+        if (in != null) {
+            in.close();
+        }
+        if (socket != null) {
+            socket.close();
+        }
+    }
+
     @SuppressWarnings("deprecation")
     @Override
     public void run() {
         boolean post = false;
         int length = -1;
         try {
-            DataOutputStream out = new DataOutputStream(socket.getOutputStream());
-            DataInputStream in = new DataInputStream(socket.getInputStream());
+            out = new DataOutputStream(socket.getOutputStream());
+            in = new DataInputStream(socket.getInputStream());
 
             String input;
             String url;
 
             input = in.readLine();
-
             System.out.println("input = " + input);
             if (input == null) {
-                out.close();
-                in.close();
-                socket.close();
-                
+                close();
+
                 return;
             }
 
             StringTokenizer tok = new StringTokenizer(input);
             if (tok.countTokens() != 3) {
                 System.out.println("this is a problem");
-                out.close();
-                in.close();
-                socket.close();
-                
+                close();
+
                 return;
             }
 
@@ -101,10 +112,8 @@ public class Proxy implements Runnable {
             try {
                 conn = (HttpURLConnection) new URL(url).openConnection();
             } catch (java.net.MalformedURLException e) {
-                out.close();
-                in.close();
-                socket.close();
-                
+                close();
+
                 return;
             }
 
@@ -138,21 +147,21 @@ public class Proxy implements Runnable {
                 }
                 count++;
             }
-            
+
             if (post) {
                 conn.setDoOutput(true);
                 conn.setRequestMethod("POST");
                 conn.setFixedLengthStreamingMode(length);
 
                 DataOutputStream put_out = new DataOutputStream(conn.getOutputStream());
-                
+
                 byte[] post_data = new byte[length];
                 in.readFully(post_data);
                 put_out.write(post_data);
                 put_out.flush();
                 put_out.close();
             }
-            
+
             InputStream is;
 
             boolean gzip = false;
@@ -165,7 +174,7 @@ public class Proxy implements Runnable {
                 is = conn.getInputStream();
                 if (gzip)
                     is = new GZIPInputStream(is);
-                
+
             } catch (java.io.IOException e) {
                 is = conn.getErrorStream();
                 if (gzip)
@@ -188,7 +197,7 @@ public class Proxy implements Runnable {
                 } else {
                     if (gzip && headerName.equals("Content-Length"))
                         continue;
-                    
+
                     if (!headerName.equals("Keep-Alive") // headers to skip
                             && !headerName.equals("Connection")
                             && !headerName.startsWith("Proxy-")
@@ -211,24 +220,12 @@ public class Proxy implements Runnable {
                     out.write(webpage, 0, size);
                     size = is.read(webpage, 0, BUFFER_SIZE);
                 }
+                is.close();
             }
-            
+
             out.flush();
 
             conn.disconnect();
-            // close out all resources
-            if (is != null) {
-                is.close();
-            }
-            if (out != null) {
-                out.close();
-            }
-            if (in != null) {
-                in.close();
-            }
-            if (socket != null) {
-                socket.close();
-            }
         } catch (java.net.SocketException e) {
             //ignore, client probably closed socket
         } catch (Exception e) {
